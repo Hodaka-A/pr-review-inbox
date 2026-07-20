@@ -1,0 +1,18 @@
+<svg width="64" height="64" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1f2e"/>
+      <stop offset="100%" style="stop-color:#0d1117"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+  <path d="M80,90 L432,90 Q452,90 452,110 L452,330 Q452,350 432,350 L170,350 L100,430 L120,350 L80,350 Q60,350 60,330 L60,110 Q60,90 80,90 Z"
+        fill="none" stroke="#ffffff" stroke-width="22" stroke-linejoin="round" stroke-linecap="round"/>
+  <line x1="178" y1="155" x2="178" y2="285" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="178" cy="140" r="26" fill="#0d1117" stroke="#ffffff" stroke-width="18"/>
+  <circle cx="178" cy="300" r="26" fill="#0d1117" stroke="#ffffff" stroke-width="18"/>
+  <line x1="334" y1="195" x2="334" y2="300" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="334" cy="300" r="26" fill="#0d1117" stroke="#ffffff" stroke-width="18"/>
+  <path d="M334,185 Q334,140 290,140 L210,140" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  <polyline points="228,118 204,140 228,162" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
