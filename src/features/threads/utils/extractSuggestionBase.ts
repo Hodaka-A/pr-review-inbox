@@ -1,10 +1,11 @@
+import { parseDiffHunk } from "./parseDiffHunk";
+
 /**
  * ```suggestion が置き換える「変更前」の行を diffHunk から復元する。
  *
  * GitHub の suggestion はコメントが付いた行範囲 [startLine, line]（変更後ファイル基準）を
  * 置き換える仕組みで、生 Markdown 側には置き換え後のコードしか含まれない。
- * diffHunk はコメント行で終わる unified diff なので、変更後ファイルに存在する行
- * （context と追加行）だけを残して末尾から範囲の行数分を取れば置き換え対象が得られる。
+ * parseDiffHunk が各行に変更後の行番号を振るので、その範囲に入る行を拾えば置き換え対象になる。
  *
  * @param diffHunk - スレッドの diffHunk（@@ ヘッダー付きの unified diff）
  * @param line - コメントが付いた終了行（変更後ファイル基準）
@@ -18,20 +19,21 @@ export const extractSuggestionBase = (
 ): string[] | null => {
   if (!diffHunk || !line) return null;
 
-  const rangeSize = line - (startLine ?? line) + 1;
-  if (rangeSize < 1) return null;
+  const from = startLine ?? line;
+  if (from > line) return null;
 
-  // 変更後ファイルに存在する行だけを残す（削除行 `-` は変更後には無い）。
-  // \ No newline at end of file のようなメタ行も除外する
-  const newFileLines = diffHunk
-    .replace(/\n$/, "")
-    .split("\n")
-    .filter((l) => !l.startsWith("@@") && !l.startsWith("-") && !l.startsWith("\\"))
-    .map((l) => l.slice(1));
+  // 変更後ファイル基準の行範囲に入る行を拾う（削除行は変更後に存在しないので newLineNumber が null）
+  const baseLines = parseDiffHunk(diffHunk)
+    .filter(
+      (diffLine) =>
+        diffLine.newLineNumber !== null &&
+        diffLine.newLineNumber >= from &&
+        diffLine.newLineNumber <= line,
+    )
+    .map((diffLine) => diffLine.content);
 
-  // diffHunk はコメント行で終わるため、末尾 rangeSize 行が置き換え対象。
-  // 行数が足りなければ範囲がずれている（コメント後にファイルが更新された等）ので諦める
-  if (newFileLines.length < rangeSize) return null;
+  // 範囲を全て復元できなかった場合（コメント後にファイルが更新された等）は諦める
+  if (baseLines.length !== line - from + 1) return null;
 
-  return newFileLines.slice(newFileLines.length - rangeSize);
+  return baseLines;
 };

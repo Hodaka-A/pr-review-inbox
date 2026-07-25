@@ -60,8 +60,8 @@ export const ThreadGroup = ({
             <div className="bg-gray-50 border-b border-gray-300 overflow-x-auto">
               <div className="font-mono text-[12px] leading-[20px] min-w-max">
                 {diffLines.map((line, index) => {
-                  const isAddition = line.startsWith("+");
-                  const isDeletion = line.startsWith("-");
+                  const isAddition = line.type === "add";
+                  const isDeletion = line.type === "del";
 
                   return (
                     <div
@@ -74,21 +74,40 @@ export const ThreadGroup = ({
                           : "bg-white"
                       }`}
                     >
-                      {/* 左側のマーカー */}
+                      {/* 行番号（変更前 / 変更後） */}
                       <div
-                        className={`w-[40px] flex-shrink-0 px-2 text-center select-none border-r ${
+                        className={`flex shrink-0 select-none border-r ${
                           isAddition
-                            ? "bg-[#ccffd8] text-[#24292f] border-[#bef5cb]"
+                            ? "bg-[#ccffd8] text-[#24292f]/60 border-[#bef5cb]"
                             : isDeletion
-                            ? "bg-[#ffd7d5] text-[#24292f] border-[#ffc1bc]"
+                            ? "bg-[#ffd7d5] text-[#24292f]/60 border-[#ffc1bc]"
                             : "bg-white text-gray-400 border-gray-200"
+                        }`}
+                      >
+                        <span className="w-[36px] px-1.5 text-right">
+                          {line.oldLineNumber ?? ""}
+                        </span>
+                        <span className="w-[36px] px-1.5 text-right">
+                          {line.newLineNumber ?? ""}
+                        </span>
+                      </div>
+
+                      {/* +/- マーカー */}
+                      <div
+                        className={`w-[20px] shrink-0 text-center select-none ${
+                          isAddition
+                            ? "bg-[#e6ffec] text-[#116329]"
+                            : isDeletion
+                            ? "bg-[#ffebe9] text-[#82071e]"
+                            : "bg-white text-gray-300"
                         }`}
                       >
                         {isAddition ? "+" : isDeletion ? "-" : ""}
                       </div>
+
                       {/* コード内容 */}
-                      <div className="px-3 flex-1 whitespace-pre text-[#24292f]">
-                        {line.substring(1) || " "}
+                      <div className="px-2 flex-1 whitespace-pre text-[#24292f]">
+                        {line.content || " "}
                       </div>
                     </div>
                   );
