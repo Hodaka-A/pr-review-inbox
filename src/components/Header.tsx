@@ -2,7 +2,7 @@ import { PrCommentIcon } from "@/components/ui/icons/PrCommentIcon";
 import { Setting } from "@/components/ui/icons/Setting";
 import { ArrowPath } from "./ui/icons/ArrawPath";
 import { useState } from "react";
-import { SettingModal } from "@/features/setting/components/SettingModal";
+import { SettingModalContainer } from "@/features/setting/components/SettingModalContainer";
 
 export const Header = () => {
   const [isShowModal, setIsShowModal] = useState<boolean>(false);
@@ -25,7 +25,9 @@ export const Header = () => {
           </button>
         </div>
       </header>
-      {isShowModal && <SettingModal onClose={() => setIsShowModal(false)} />}
+      {isShowModal && (
+        <SettingModalContainer onClose={() => setIsShowModal(false)} />
+      )}
     </>
   );
 };
