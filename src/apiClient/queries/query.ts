@@ -1,6 +1,6 @@
 export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
   query GetPRComments {
-    search(first: 20, query: "is:pr author:@me is:open", type: ISSUE) {
+    search(first: 20, query: "is:pr author:@me is:open comments:>0", type: ISSUE) {
       issueCount
       edges {
         node {
@@ -47,6 +47,7 @@ export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
                 state
                 submittedAt
                 body
+                bodyHTML
               }
             }
             reviewThreads(first: 20) {
@@ -62,20 +63,9 @@ export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
                     }
                     createdAt
                     body
+                    bodyHTML
                     url
                     diffHunk
-                  }
-                }
-              }
-            }
-            reviewRequests(first: 20) {
-              nodes {
-                requestedReviewer {
-                  ... on User {
-                    login
-                  }
-                  ... on Team {
-                    name
                   }
                 }
               }

@@ -17,6 +17,7 @@ export const extractReviewComments = (reviews: {
       state: review.state,
       submittedAt: review.submittedAt,
       body: review.body,
+      bodyHTML: review.bodyHTML,
       createdAt: review.submittedAt,
     }))
     .filter((comment) => comment.body && comment.body.trim() !== "");

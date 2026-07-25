@@ -7,6 +7,7 @@ export type Author = {
 export type ReviewThreadCommentNode = {
   author?: Author;
   body: string;
+  bodyHTML: string;
   createdAt: string;
   url: string;
   diffHunk: string;
@@ -26,6 +27,7 @@ export type ReviewNode = {
   state: string;
   submittedAt: string;
   body: string;
+  bodyHTML: string;
   createdAt: string;
 };
 
@@ -64,14 +66,6 @@ export type PullRequestNode = {
   reviewThreads: {
     nodes: ReviewThreadNode[];
   };
-  reviewRequests: {
-    nodes: {
-      requestedReviewer: {
-        login: string;
-        avatarUrl: string;
-      };
-    }[];
-  };
 };
 
 export type fetchResponsePullRequestDataType = {
@@ -83,16 +77,16 @@ export type fetchResponsePullRequestDataType = {
   };
 };
 
-// 変換後のコメント型
 export type ThreadComment = {
   commentType: "threadComment";
-  threadId: string; // スレッドを識別するID (例: "src/App.tsx:42")
-  threadIndex: number; // スレッド内での順番（0始まり）
-  threadCreatedAt: string; // スレッドの作成日時（最初のコメントの作成日時）
+  threadId: string;
+  threadIndex: number;
+  threadCreatedAt: string;
   author?: string;
   avatarUrl?: string;
   isResolved?: boolean;
   body?: string;
+  bodyHTML?: string;
   createdAt?: string;
   diffHunk?: string;
   url?: string;
@@ -107,6 +101,7 @@ export type ReviewComment = {
   state?: string;
   submittedAt?: string;
   body?: string;
+  bodyHTML?: string;
   createdAt?: string;
 };
 

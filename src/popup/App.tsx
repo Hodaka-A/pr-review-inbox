@@ -8,7 +8,7 @@ export default function App() {
   const queryClient = new QueryClient();
 
   return (
-    <div className="w-[600px]">
+    <div className="w-[650px]">
       <Header />
       <QueryClientProvider client={queryClient}>
         <PrThreadNavigationProvider>

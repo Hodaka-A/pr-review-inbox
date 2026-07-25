@@ -49,7 +49,6 @@ export const groupCommentsByThread = (comments: MergedComment[]): TimelineItem[]
     });
   }
 
-  // 時系列順にソート
   timeline.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   return timeline;
