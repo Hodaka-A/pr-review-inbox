@@ -1,6 +1,7 @@
 import { Chat } from "@/components/ui/icons/Chat";
 import { ChevronRight } from "@/components/ui/icons/ChevronRight";
 import { GitPullRequest } from "@/components/ui/icons/GitPullRequest";
+import { GitPullRequestDraft } from "@/components/ui/icons/GitPullRequestDraft";
 import { usePrThreadNavigation } from "@/contexts/prThreadNavigationContext";
 import { PullRequestWithCommentsType } from "@/types/pullRequestDataType";
 
@@ -28,11 +29,12 @@ export const PrCommentCard = ({
       <div className="p-4">
         <div className="flex gap-3 items-center">
           {/* PR Icon */}
-          <div>
-            <GitPullRequest
-              size={20}
-              className={pr.isDraft ? "text-gray-400" : "text-green-600"}
-            />
+          <div title={pr.isDraft ? "下書き" : "オープン"}>
+            {pr.isDraft ? (
+              <GitPullRequestDraft size={20} className="text-gray-400" />
+            ) : (
+              <GitPullRequest size={20} className="text-green-600" />
+            )}
           </div>
           {/* PR Content */}
           <div className="flex-1 min-w-0">
