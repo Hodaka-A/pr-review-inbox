@@ -57,7 +57,7 @@ export const ThreadGroup = ({
         <div>
           {/* 差分コード表示 */}
           {diffLines.length > 0 && (
-            <div className="bg-gray-50 border-b border-gray-300 overflow-x-auto">
+            <div className="bg-gray-50 border-b border-gray-300 overflow-x-auto overflow-y-hidden">
               <div className="font-mono text-[12px] leading-[20px] min-w-max">
                 {diffLines.map((line, index) => {
                   const isAddition = line.type === "add";

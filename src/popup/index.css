@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+html,
+body {
+  overflow: hidden;
+}
+
 /* react-markdown(GFM) で描画したコメント本文のスタイル。GitHub の見た目に寄せる */
 .markdown-body {
   color: #1f2328;
@@ -65,7 +70,8 @@
   padding: 12px;
   background: #f6f8fa;
   border-radius: 6px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   font-size: 85%;
   line-height: 1.45;
 }
@@ -87,7 +93,8 @@
 .markdown-body table {
   border-collapse: collapse;
   display: block;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   width: max-content;
   max-width: 100%;
 }

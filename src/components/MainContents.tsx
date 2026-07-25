@@ -7,7 +7,7 @@ import { Activity } from "react";
 export const MainContents = () => {
   const { isShowingThread } = usePrThreadNavigation();
   return (
-    <main className="flex-1 overflow-auto">
+    <main className="flex-1 min-h-0">
       <Activity mode={isShowingThread ? "hidden" : "visible"}>
         <PrCommentsListContainer />
       </Activity>
