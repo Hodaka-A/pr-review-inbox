@@ -56,7 +56,7 @@ export const SettingModal = ({
         </div>
         {/* required による必須チェックをブラウザに任せるため form の submit で保存する */}
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-6 space-y-4">
+          <div className="px-8 py-8 space-y-4">
             <div>
               <h3 className="text-base font-semibold mb-2">
                 パーソナルアクセストークン
@@ -74,14 +74,19 @@ export const SettingModal = ({
                   <Redirect size={16} />
                 </a>
               </p>
-              <input
-                type="text"
-                value={token}
-                onChange={(e) => onTokenChange(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxx"
-                className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              <div className="flex items-center gap-3">
+                <span className="px-1.5 py-0.5 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded">
+                  必須
+                </span>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={(e) => onTokenChange(e.target.value)}
+                  placeholder="ghp_xxxxxxxxxxxxxxxx"
+                  className="w-md px-4 py-2 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
             </div>
           </div>
 
