@@ -1,7 +1,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { MergedComment } from "@/types/pullRequestDataType";
 import { formatDate } from "../utils/formatDate";
-import { enhanceDiffHtml } from "../utils/enhanceDiffHtml";
+import { CommentMarkdown } from "./markdown/CommentMarkdown";
 
 type PrThreadCommentCardProps = {
  comment:MergedComment;
@@ -31,16 +31,18 @@ export const PrThreadCommentCard = ({ comment }: PrThreadCommentCardProps) => {
         </div>
 
         {/* Comment Body */}
-        {comment.bodyHTML ? (
-          <div
-            className="px-3 py-2.5 text-xs leading-relaxed text-gray-900 markdown-body"
-            dangerouslySetInnerHTML={{ __html: enhanceDiffHtml(comment.bodyHTML) }}
+        <div className="px-3 py-2.5">
+          <CommentMarkdown
+            body={comment.body ?? ""}
+            {...(comment.commentType === "threadComment"
+              ? {
+                  diffHunk: comment.diffHunk,
+                  line: comment.line,
+                  startLine: comment.startLine,
+                }
+              : {})}
           />
-        ) : (
-          <div className="px-3 py-2.5 text-xs leading-relaxed text-gray-900 whitespace-pre-wrap">
-            {comment.body ?? ""}
-          </div>
-        )}
+        </div>
 
         {/* Additional Info for Review Comments */}
         {comment.commentType === "reviewerComment" && comment.state && (

@@ -7,7 +7,6 @@ export type Author = {
 export type ReviewThreadCommentNode = {
   author?: Author;
   body: string;
-  bodyHTML: string;
   createdAt: string;
   url: string;
   diffHunk: string;
@@ -17,6 +16,8 @@ export type ReviewThreadNode = {
   isResolved: boolean;
   path: string;
   line: number;
+  /** 複数行コメントの開始行。単一行コメントでは null */
+  startLine: number | null;
   comments: {
     nodes: ReviewThreadCommentNode[];
   };
@@ -27,7 +28,6 @@ export type ReviewNode = {
   state: string;
   submittedAt: string;
   body: string;
-  bodyHTML: string;
   createdAt: string;
 };
 
@@ -86,11 +86,12 @@ export type ThreadComment = {
   avatarUrl?: string;
   isResolved?: boolean;
   body?: string;
-  bodyHTML?: string;
   createdAt?: string;
   diffHunk?: string;
   url?: string;
   line?: number;
+  /** 複数行コメントの開始行。単一行コメントでは line と同値 */
+  startLine?: number;
   path?: string;
 };
 
@@ -101,7 +102,6 @@ export type ReviewComment = {
   state?: string;
   submittedAt?: string;
   body?: string;
-  bodyHTML?: string;
   createdAt?: string;
 };
 

@@ -47,7 +47,6 @@ export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
                 state
                 submittedAt
                 body
-                bodyHTML
               }
             }
             reviewThreads(first: 20) {
@@ -55,6 +54,7 @@ export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
                 isResolved
                 path
                 line
+                startLine
                 comments(first: 20) {
                   nodes {
                     author {
@@ -63,7 +63,6 @@ export const GET_PR_COMMENTS_QUERY = /* GraphQL */ `
                     }
                     createdAt
                     body
-                    bodyHTML
                     url
                     diffHunk
                   }

@@ -29,11 +29,11 @@ export const extractThreadComments = (reviewThreads: {
       avatarUrl: comment.author?.avatarUrl ?? "",
       isResolved: thread.isResolved,
       body: comment.body,
-      bodyHTML: comment.bodyHTML,
       createdAt: comment.createdAt,
       diffHunk: comment.diffHunk,
       url: comment.url,
       line: thread.line,
+      startLine: thread.startLine ?? thread.line,
       path: thread.path,
     }));
   });

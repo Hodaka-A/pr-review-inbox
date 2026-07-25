@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* GitHub bodyHTML 用スタイル。GitHub の見た目に寄せる */
+/* react-markdown(GFM) で描画したコメント本文のスタイル。GitHub の見た目に寄せる */
 .markdown-body {
   color: #1f2328;
   font-size: 13px;
@@ -18,8 +18,7 @@
 .markdown-body blockquote,
 .markdown-body pre,
 .markdown-body table,
-.markdown-body details,
-.markdown-body .highlight {
+.markdown-body details {
   margin: 0 0 12px;
 }
 
@@ -41,7 +40,10 @@
 .markdown-body ul { list-style: disc; padding-left: 1.5em; }
 .markdown-body ol { list-style: decimal; padding-left: 1.5em; }
 .markdown-body li + li { margin-top: 2px; }
-.markdown-body li > input[type="checkbox"] {
+
+/* GFM タスクリスト（remark-gfm が .contains-task-list / .task-list-item を付ける） */
+.markdown-body ul.contains-task-list { list-style: none; padding-left: 1.2em; }
+.markdown-body li.task-list-item > input[type="checkbox"] {
   margin: 0 4px 0 -1.4em;
   vertical-align: middle;
 }
@@ -67,25 +69,13 @@
   font-size: 85%;
   line-height: 1.45;
 }
-.markdown-body pre code,
-.markdown-body pre .highlight {
+.markdown-body pre code {
   padding: 0;
   margin: 0;
   background: transparent;
   border-radius: 0;
   font-size: 100%;
   white-space: pre;
-}
-.markdown-body .highlight pre {
-  margin: 0;
-}
-
-/* Suggested change のテーブル型 diff だけは pre の外枠を除去（テーブル自体で色分けするため） */
-.markdown-body pre:has(.diff-table),
-.markdown-body pre:has([class*="blob-"]) {
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
 }
 
 .markdown-body blockquote {
@@ -141,130 +131,29 @@
   margin-left: 4px;
 }
 
-/* GitHub の diff 行ハイライト（インライン span としての最低限の色付け） */
-.markdown-body .pl-md { color: #82071e; }
-.markdown-body .pl-mi1 { color: #116329; }
-.markdown-body .pl-mc { color: #953800; }
+/* GFM 打ち消し線 */
+.markdown-body del,
+.markdown-body s { text-decoration: line-through; }
 
-/* enhanceDiffHtml で行ごとにラップされた ```diff ブロックの表現 */
-.markdown-body pre.diff-enhanced {
-  padding: 8px 0;
-  background: #f6f8fa;
-  overflow-x: auto;
+/* GFM 脚注（remark-gfm が section.footnotes として本文末尾に出力する） */
+.markdown-body sup { font-size: 75%; line-height: 0; vertical-align: super; }
+.markdown-body section.footnotes {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #d1d9e0;
+  font-size: 92%;
+  color: #59636e;
 }
-/* code の幅を「最長行の幅と pre 可視幅の大きい方」に固定する。
-   inline-block の shrink-to-fit は available-width で止まってしまうため、
-   width: max-content を明示して最長行まで伸ばし、min-width: 100% で
-   短い場合の pre 幅を担保する。これにより子 .diff-line(display: block)
-   の背景が横スクロール時にも右端まで途切れず塗られる */
-.markdown-body pre.diff-enhanced > code {
-  display: block;
-  width: max-content;
-  min-width: 100%;
+.markdown-body section.footnotes > h2 { font-size: 1em; margin: 0 0 4px; border-bottom: 0; }
+/* 脚注見出しは GitHub 同様スクリーンリーダー専用にする */
+.markdown-body .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
   padding: 0;
-  background: transparent;
-  box-sizing: border-box;
-}
-.markdown-body .diff-line {
-  display: block;
-  padding: 0 12px;
-  white-space: pre;
-  /* 行頭マーカー列(28px)を濃色、本文側を淡色で 2 段塗り */
-  background-repeat: no-repeat;
-  background-size: 28px 100%, 100% 100%;
-  background-position: 0 0, 0 0;
-}
-.markdown-body .diff-line-add {
-  background-image:
-    linear-gradient(#ccffd8, #ccffd8),
-    linear-gradient(#e6ffec, #e6ffec);
-  color: #1f2328;
-}
-.markdown-body .diff-line-del {
-  background-image:
-    linear-gradient(#ffd7d5, #ffd7d5),
-    linear-gradient(#ffebe9, #ffebe9);
-  color: #1f2328;
-}
-.markdown-body .diff-line-context {
-  background: transparent;
-  color: #1f2328;
-}
-/* .pl-md / .pl-mi1 は本来 GitHub 上の diff マーカー色付け用だが、行全体を
-   塗る際は本文と同じ色・太さに揃える */
-.markdown-body pre.diff-enhanced .pl-md,
-.markdown-body pre.diff-enhanced .pl-mi1 {
-  color: #1f2328;
-  font-weight: inherit;
-}
-
-/* GitHub の Primer シンタックスハイライト（主要なもの） */
-.markdown-body .pl-c { color: #59636e; font-style: italic; }
-.markdown-body .pl-c1,
-.markdown-body .pl-s .pl-v { color: #0550ae; }
-.markdown-body .pl-e,
-.markdown-body .pl-en { color: #6639ba; }
-.markdown-body .pl-smi,
-.markdown-body .pl-s .pl-s1 { color: #1f2328; }
-.markdown-body .pl-ent { color: #116329; }
-.markdown-body .pl-k { color: #cf222e; }
-.markdown-body .pl-s,
-.markdown-body .pl-pds,
-.markdown-body .pl-s .pl-pse .pl-s1,
-.markdown-body .pl-sr,
-.markdown-body .pl-sr .pl-cce,
-.markdown-body .pl-sr .pl-sre,
-.markdown-body .pl-sr .pl-sra { color: #0a3069; }
-.markdown-body .pl-v,
-.markdown-body .pl-smw { color: #953800; }
-.markdown-body .pl-bu { color: #82071e; }
-.markdown-body .pl-ii { color: #f6f8fa; background: #82071e; }
-
-/* CodeRabbit 系の「Suggested change」テーブル（コードを含むテーブル）は枠線を消す */
-.markdown-body table:has(code),
-.markdown-body table:has(pre),
-.markdown-body table:has([class*="pl-"]),
-.markdown-body table:has([class*="blob-"]) {
-  border-collapse: collapse;
-  display: table;
-  width: 100%;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
   border: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
 }
-.markdown-body table:has(code) th,
-.markdown-body table:has(code) td,
-.markdown-body table:has(pre) th,
-.markdown-body table:has(pre) td,
-.markdown-body table:has([class*="pl-"]) th,
-.markdown-body table:has([class*="pl-"]) td,
-.markdown-body table:has([class*="blob-"]) th,
-.markdown-body table:has([class*="blob-"]) td {
-  border: 0;
-  background: transparent;
-  padding: 1px 10px;
-  vertical-align: top;
-  font-weight: normal;
-  text-align: left;
-}
-.markdown-body .blob-num,
-.markdown-body td.blob-num {
-  color: rgba(31, 35, 40, 0.4);
-  text-align: right;
-  width: 1%;
-  min-width: 40px;
-  padding: 1px 10px !important;
-  user-select: none;
-}
-.markdown-body .blob-code-marker,
-.markdown-body td.blob-code-marker {
-  width: 1%;
-  padding: 1px 6px !important;
-  user-select: none;
-}
-.markdown-body .blob-code-deletion,
-.markdown-body tr .blob-code-deletion { background: #ffebe9 !important; }
-.markdown-body .blob-code-addition,
-.markdown-body tr .blob-code-addition { background: #dafbe1 !important; }
-.markdown-body .blob-num-deletion { background: #ffd7d5 !important; color: rgba(31, 35, 40, 0.6); }
-.markdown-body .blob-num-addition { background: #ccffd8 !important; color: rgba(31, 35, 40, 0.6); }

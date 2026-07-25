@@ -19,6 +19,12 @@ export default defineConfig({
     zip({ outDir: 'release', outFileName: `crx-${name}-${version}.zip` }),
     tailwindcss(),
   ],
+  build: {
+    // react-markdown + remark/rehype 一式で ~325KB 増える。
+    // ポップアップはローカルディスクから読むためネットワーク待ちがなく分割の利がないので、
+    // 警告の閾値だけ引き上げる
+    chunkSizeWarningLimit: 700,
+  },
   server: {
     cors: {
       origin: [
