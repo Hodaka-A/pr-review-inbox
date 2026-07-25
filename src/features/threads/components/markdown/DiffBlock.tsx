@@ -12,7 +12,7 @@ export const DiffBlock = ({ code }: DiffBlockProps) => {
   const lines = parseDiffLines(code);
 
   return (
-    <div className="my-3 overflow-x-auto rounded-md bg-[#f6f8fa] py-2">
+    <div className="my-3 overflow-x-auto overflow-y-hidden rounded-md bg-[#f6f8fa] py-2">
       <div className="w-max min-w-full font-mono text-[11px] leading-[18px]">
         {lines.map((line, index) => (
           <div

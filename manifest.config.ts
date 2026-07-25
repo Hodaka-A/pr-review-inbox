@@ -7,11 +7,11 @@ export default defineManifest({
   version: pkg.version,
   description: '自分が出した open な PR に届いたレビューコメントをまとめて確認できます。',
   icons: {
-    48: 'pr_comment_icon_white_64.png',
+    48: 'pr_comment_icon.png',
   },
   action: {
     default_icon: {
-      48: 'pr_comment_icon_white_64.png',
+      48: 'pr_comment_icon.png',
     },
     default_popup: 'src/popup/index.html',
   },

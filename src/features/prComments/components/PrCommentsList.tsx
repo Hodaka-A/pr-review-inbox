@@ -1,4 +1,5 @@
 import { PullRequestWithCommentsType, MergedComment } from "@/types/pullRequestDataType";
+import { useScrollRestoration } from "@/hooks/useScrollRestoration";
 import { PrCommentCard } from "./PrCommentCard";
 
 type PrCommentsListProps = {
@@ -6,6 +7,8 @@ type PrCommentsListProps = {
 };
 
 export const PrCommentsList = ({ prComments }: PrCommentsListProps) => {
+  const scrollRef = useScrollRestoration<HTMLDivElement>();
+
   // ユニークな著者リストを取得
   const getUniqueAuthors = (comments?: MergedComment[]) => {
     const authorsMap = new Map<string, { name: string; avatarUrl: string }>();
@@ -27,7 +30,7 @@ export const PrCommentsList = ({ prComments }: PrCommentsListProps) => {
   };
 
   return (
-    <div className="p-4 bg-slate-50 h-full overflow-y-auto">
+    <div ref={scrollRef} className="p-4 bg-slate-50 h-full overflow-y-auto">
       {prComments.map((pr, index) => {
         const prId = `pr-${pr.number}`;
         const uniqueAuthors = getUniqueAuthors(pr.comments);

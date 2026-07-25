@@ -22,7 +22,7 @@ export const SuggestedChange = ({ code, baseLines }: SuggestedChangeProps) => {
         Suggested change
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <div className="w-max min-w-full font-mono text-[11px] leading-[18px]">
           {/* 変更前（削除行） */}
           {baseLines?.map((line, index) => (
