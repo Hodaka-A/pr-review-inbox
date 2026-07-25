@@ -11,7 +11,7 @@ export const Header = () => {
       <header className="px-4 py-2 flex justify-between items-center bg-white border-b border-gray-300 sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <PrCommentIcon />
-          <h1 className="text-lg font-bold">PR Comments Box</h1>
+          <h1 className="text-lg font-bold">PR Review Inbox</h1>
         </div>
         <div className="flex items-center gap-2">
           <button className="rounded-full cursor-pointer p-2 hover:bg-gray-100 transition-colors duration-150">
