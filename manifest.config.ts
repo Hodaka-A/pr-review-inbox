@@ -16,8 +16,7 @@ export default defineManifest({
     },
     default_popup: 'src/popup/index.html',
   },
-  permissions: [
-    'contentSettings',
-    'storage'
-  ],
+  // トークンの保存にのみ chrome.storage を使う。
+  // GitHub API は CORS を許可しているので host_permissions は不要
+  permissions: ['storage'],
 })
