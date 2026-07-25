@@ -4,7 +4,6 @@ import { Loading } from "./Loading";
 
 export const PrCommentsListContainer = () => {
   const { prComments, isPending, isError, error } = useFetchPrComments();
-  console.log("prComments", prComments);
 
   if (isPending) {
     return <Loading />;

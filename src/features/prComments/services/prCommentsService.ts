@@ -52,6 +52,5 @@ export const fetchPrComments = async (
 ): Promise<PullRequestWithCommentsType[]> => {
   const client = new FetchGraphQLApiClient(token);
   const responseData = await client.fetch();
-  console.log(responseData);
   return transformPrSearchResults(responseData);
 };
