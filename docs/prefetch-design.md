@@ -1,234 +1,140 @@
 # PR コメントの事前取得（バックグラウンド・プリフェッチ）
 
-> このドキュメントは設計案です。2026-07-25 時点で実装は行われていません。
+> このドキュメントは設計案です。2026-07-25 時点で未実装。
 
-## これは何を解決するのか
+## 解決したいこと
 
-### 現状の問題
+いまは popup を開いた瞬間に GitHub API を叩き始めるため、**開くたびに待たされます**（実測 約2.3秒）。この遅さは GitHub の `search` API 由来で、クライアント側では縮められません。
 
-いまの拡張機能は、**ユーザーが popup を開いた瞬間に GitHub API を叩き始めます。**
-
-```
-popup を開く → fetch 開始 → 待つ… → 表示
-                            ↑ ここでユーザーが待たされる
-```
-
-GitHub の GraphQL API は、PR・レビュー・スレッド・コメントをまとめて取得しているため応答に時間がかかります。つまり**アイコンをクリックするたびに毎回待つ**ことになります。
-
-### 変更後
-
-**popup を開く前に、あらかじめ裏側で取得しておく**ようにします。
+そこで **裏側で定期的に取得して保存しておき、popup は保存済みデータを即表示する**ようにします。fetch そのものは速くなりませんが、ユーザーの待ち時間は実質 0 になります。
 
 ```
-（裏側で10分ごとに取得 → 保存）
-
-popup を開く → 保存済みデータを表示（待ち 0 秒）
-                → 同時に裏で最新化
+Before: popup を開く → fetch(2.3秒待つ) → 表示
+After : （裏で10分ごとに取得・保存）
+        popup を開く → 保存済みを即表示 → 同時に裏で最新化
 ```
 
-ユーザーから見ると、**アイコンをクリックした瞬間に一覧が出る**ようになります。
+## 前提：Chrome 拡張の3つの登場人物
 
----
-
-## 前提知識：Chrome 拡張の3つの登場人物
-
-この変更を理解するには、次の3つの区別が必要です。
-
-| 登場人物 | 実体 | 生きている時間 |
+| 登場人物 | 実体 | 寿命 |
 |---|---|---|
-| **popup** | アイコンをクリックすると出る画面 | **開いている間だけ** |
-| **service worker**（background） | 画面を持たない裏方のスクリプト | イベント発生時だけ起きて、**数十秒で寝る** |
-| **storage** | 拡張機能用のデータ保存領域 | **ずっと残る** |
+| popup | クリックで出る画面 | 開いている間だけ |
+| service worker（background） | 画面のない裏方 | イベント時だけ起きて数十秒で停止 |
+| storage | データ保存領域 | 永続 |
 
-ここで一番重要なのは:
-
-> **popup を閉じると、popup の JavaScript は完全に消えます。** 変数もメモリも残りません。
-
-だから「popup で取得したデータを次回に使い回す」ことは、そのままではできません。データを**storage に書いておく**必要があります。
-
-そしてもう一つ:
-
-> **service worker も数十秒で停止します。**
-
-なので service worker も変数にデータを持てません。結局、**データの置き場所は storage しかない**ということになります。
+popup も service worker も**停止すると変数が消える**ため、データの置き場所は storage 一択です。
 
 ```
-┌─────────┐   ①取得を依頼    ┌──────────────┐
-│  popup  │ ───────────────→ │service worker│
-│ (一時的) │                  │  (一時的)     │
-└─────────┘                  └──────────────┘
-     ↑                              │
-     │ ③読む                  ②書く │
-     │        ┌──────────┐          │
-     └────────│ storage  │←─────────┘
-              │ (永続)    │
-              └──────────┘
+popup ──①取得依頼──→ service worker
+  ↑                      │②書く
+  │③読む                 ↓
+  └──────── storage ←────┘
 ```
 
----
+## storage は sync と local を使い分ける
 
-## storage の `sync` と `local`
-
-Chrome の storage には2種類あります。**この使い分けが今回の設計の中心です。**
-
-| | `chrome.storage.sync` | `chrome.storage.local` |
+| | sync | local |
 |---|---|---|
-| 容量 | **100KB**（1キー 8KB） | **10MB** |
-| 端末間の同期 | される | されない |
-| 用途 | 設定・トークン | キャッシュ |
+| 容量 | 100KB | 10MB |
+| 端末間同期 | する | しない |
+| 用途 | トークン | キャッシュ |
 
-### なぜキャッシュは `local` なのか
+- **トークン → sync**：小さく、別 PC でも再入力したくない
+- **キャッシュ → local**：大きく（PR20件で約200KB）、API から取り直せるので同期不要
 
-理由は2つあります。
+キャッシュは毎回1キーを丸ごと上書きするだけなので累積せず、サイズは常に一定です。
 
-**理由1: 容量**
-
-PR コメントのデータには、コメント本文（`body`）とコード差分（`diffHunk`）が含まれます。これが大きい。
-
-```
-フルデータ（PR 20件） ≒ 200KB
-
-sync の上限  100KB  → ❌ 入らない
-local の上限  10MB  → ✅ 使用率 2%
-```
-
-**理由2: そもそも同期する意味がない**
-
-このデータは GitHub API から**いつでも取り直せます**。別の PC で開いても、その PC が自分で取得すれば同じものが手に入ります。端末をまたいで同期する必要はありません。
-
-一方**トークンは同期したい**（別の PC で再入力したくない）ので、こちらは `sync` に置いたままにします。
+## 変更するファイル
 
 ```
-sync  → トークン（同期したい / 小さい）
-local → キャッシュ（同期不要 / 大きい）
-```
-
-### 「200KB もストレージを使って大丈夫か」について
-
-大丈夫です。理由は**キャッシュが累積しないから**です。
-
-```ts
-// 毎回この1つのキーを丸ごと上書きする（追記ではない）
-chrome.storage.local.set({ pr_comments_cache: { ... } });
-```
-
-10分ごとに1日144回書き込んでも、**サイズは常に約200KB のまま**です。ログを溜める設計なら心配ですが、これは「最新のスナップショット1枚」を置き換え続けるだけです。
-
-参考までに、200KB はスマホの写真1枚（3〜5MB）よりずっと小さいサイズです。
-
----
-
-## 変更するファイル一覧
-
-```
-新規作成
+新規
 ├─ src/utils/strorage/chromeLocalStrage.ts             local への読み書き
-├─ src/features/prComments/services/prCommentsCache.ts キャッシュの読み書き + 鮮度判定
+├─ src/features/prComments/services/prCommentsCache.ts キャッシュ管理・鮮度判定
 └─ src/background/refreshPrComments.ts                 取得処理の本体
 
 変更
-├─ src/background/index.ts                             いつ取得するかの登録
+├─ src/background/index.ts                             取得トリガの登録
 ├─ src/features/prComments/hooks/useFetchPrCommets.ts  キャッシュを使って表示
-├─ src/popup/App.tsx                                   バグ修正（後述）
+├─ src/popup/App.tsx                                   QueryClient のバグ修正
 └─ manifest.config.ts                                  権限の追加
 
-変更しない（重要）
-├─ src/apiClient/FetchGraphQLApiClient.ts
-├─ src/features/prComments/services/prCommentsService.ts
-└─ 表示コンポーネント全部（PrCommentsList, PrCommentCard, ...）
+変更しない
+└─ FetchGraphQLApiClient / prCommentsService / 表示コンポーネント全部
 ```
 
-**既存の取得ロジックと表示コンポーネントには一切手を入れません。** 変更は「いつ・どこにデータを置くか」の部分だけです。
+既存の取得ロジックと表示は触りません。変更は「いつ・どこにデータを置くか」だけです。
 
----
+## 各ファイルの要点
 
-## 各ファイルの解説
+### 1. chromeLocalStrage.ts（新規）
 
-### 1. `chromeLocalStrage.ts`（新規）
+既存 `chromeSyncStrage.ts` の `sync` を `local` に置き換えただけ。`get`/`set` の2関数。
 
-既存の `chromeSyncStrage.ts` と**まったく同じ構造**で、`sync` を `local` に置き換えただけのファイルです。
+### 2. prCommentsCache.ts（新規）— キャッシュ管理
 
-```ts
-export const getChromeLocalStorage = async <T>(
-  key: string,
-): Promise<T | undefined> => {
-  const result = await chrome.storage.local.get([key]);
-  return result[key] as T | undefined;
-};
+**鮮度は2段階で判定**（1段階だと「古いのに最新扱い」か「毎回 Loading」の一方に倒れるため）：
 
-export const setChromeLocalStorage = async <T>(
-  key: string,
-  item: T,
-): Promise<void> => {
-  await chrome.storage.local.set({ [key]: item });
-};
-```
-
-`chrome.storage.local.get` は `{ キー名: 値 }` という形のオブジェクトを返すので、**キーを開いて値だけを取り出す**のがこの関数の役目です。既存の sync 版と同じ考え方です。
-
----
-
-### 2. `prCommentsCache.ts`（新規）— キャッシュの管理
-
-ここには3つの役割があります。
-
-#### 役割A: 何を保存するかの定義
-
-```ts
-export type PrCommentsCache = {
-  data: PullRequestWithCommentsType[];  // PR コメントの中身
-  fetchedAt: number;                    // いつ取得したか（epoch ms）
-  error: string | null;                 // 直近の取得が失敗したか
-};
-```
-
-`fetchedAt` が重要です。**「このデータはいつのものか」が分からないと、古いデータを最新として見せてしまう**からです。
-
-#### 役割B: 鮮度の2段階判定
-
-「古い」を1段階で判定すると困ったことが起きます。
-
-- 判定が緩いと → 古いデータを最新として表示してしまう
-- 判定が厳しいと → 毎回 Loading になって、キャッシュの意味がない
-
-そこで**2つの閾値**を持たせます。
-
-```ts
-export const SOFT_STALE_MS = 10 * 60 * 1000;  // 10分
-export const HARD_STALE_MS = 60 * 60 * 1000;  // 60分
-```
-
-| データの古さ | 画面の見え方 | 裏側 |
+| データの古さ | 表示 | 裏側 |
 |---|---|---|
-| キャッシュなし | Loading | 取得を待つ |
-| 10分以内 | **即表示** | 何もしない |
-| 10〜60分 | **即表示** | 裏で更新 → 静かに差し替え |
-| 60分超 | Loading | 取得を待つ |
+| キャッシュなし / 60分超 | Loading | 取得を待つ |
+| 10分以内 | 即表示 | 何もしない |
+| 10〜60分 | 即表示 | 裏で更新→静かに差し替え |
 
-真ん中の「10〜60分」が肝です。**古いデータをまず見せて、裏で更新する**（stale-while-revalidate と呼ばれるパターン）。ユーザーは待たされず、しかもすぐ最新に更新されます。
+真ん中が stale-while-revalidate（古いのを見せつつ裏で更新）。60分超で Loading にするのは、古すぎるコメントを「最新」と見せないため。
 
-60分超で Loading にするのは、**1時間前のレビューコメントを「最新」として見せるのは不誠実**だからです。
+その他の役割：サイズ上限（2MB）を超えたら `updatedAt` の新しい順に残して超過分を落とし、件数を `console.warn` で記録（黙って切り捨てない）。取得失敗時も既存データは消さず `error` だけ立てる（stale-while-error）。
 
-#### 役割C: サイズの上限を守る
-
-現在の GraphQL クエリは `first: 20` を各階層で使っています。理論上の最大は:
-
-```
-20 PR × 20 スレッド × 20 コメント × 約1KB ≒ 8MB
-```
-
-現実にはこんな PR は存在しませんが（1つの PR に20スレッド、各20返信が20本並ぶ状況）、**設計としては上限を持たせるべき**です。
+**全文**：
 
 ```ts
-const SIZE_LIMIT_BYTES = 2 * 1024 * 1024; // 2MB
+import {
+  getChromeLocalStorage,
+  setChromeLocalStorage,
+} from "@/utils/strorage/chromeLocalStrage";
+import { PullRequestWithCommentsType } from "@/types/pullRequestDataType";
 
-const truncateToSizeLimit = (data) => {
-  // updatedAt が新しい順に並べる
+/** local に保存するキャッシュのキー */
+export const PR_COMMENTS_CACHE_KEY = "pr_comments_cache";
+
+/** 10分。これ以内なら再取得しない（soft stale） */
+export const SOFT_STALE_MS = 10 * 60 * 1000;
+/** 60分。これを超えたら Loading を出して取り直す（hard stale） */
+export const HARD_STALE_MS = 60 * 60 * 1000;
+
+/** キャッシュ1件あたりのサイズ上限（2MB） */
+const SIZE_LIMIT_BYTES = 2 * 1024 * 1024;
+
+export type PrCommentsCache = {
+  /** PR コメントの中身 */
+  data: PullRequestWithCommentsType[];
+  /** いつ取得したか（epoch ms）。古さ判定に必須 */
+  fetchedAt: number;
+  /** 直近の取得が失敗したときのメッセージ。成功時は null */
+  error: string | null;
+};
+
+/**
+ * キャッシュを読む。未保存なら undefined。
+ */
+export const readPrCommentsCache = async (): Promise<
+  PrCommentsCache | undefined
+> => {
+  return getChromeLocalStorage<PrCommentsCache>(PR_COMMENTS_CACHE_KEY);
+};
+
+/**
+ * サイズ上限に収まるよう、updatedAt の新しい順に残して超過分を落とす。
+ * 新しい PR ほど重要なので、古いものから切り捨てる。
+ * @param data - 元の PR 配列
+ * @returns 上限内に収めた PR 配列
+ */
+const truncateToSizeLimit = (
+  data: PullRequestWithCommentsType[],
+): PullRequestWithCommentsType[] => {
   const sorted = [...data].sort((a, b) =>
     (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
   );
 
-  // 上限に収まるまで、末尾（= 古いもの）から落とす
   let payload = sorted;
   while (
     payload.length > 1 &&
@@ -237,7 +143,7 @@ const truncateToSizeLimit = (data) => {
     payload = payload.slice(0, -1);
   }
 
-  // 何件落としたかを必ず記録する（黙って切り捨てない）
+  // 黙って切り捨てず、落とした件数を必ず記録する
   if (payload.length < sorted.length) {
     console.warn(
       `キャッシュのサイズ上限により ${sorted.length - payload.length} 件の PR を除外しました`,
@@ -246,230 +152,149 @@ const truncateToSizeLimit = (data) => {
 
   return payload;
 };
-```
 
-**新しい PR を優先して残す**のがポイントです。レビューコメントは新しいものほど重要なので。
+/**
+ * 取得成功時にキャッシュを書き込む。error は null にリセットする。
+ * @param data - 取得した PR 配列
+ * @param fetchedAt - 取得時刻（epoch ms）
+ */
+export const writePrCommentsCache = async (
+  data: PullRequestWithCommentsType[],
+  fetchedAt: number,
+): Promise<void> => {
+  await setChromeLocalStorage<PrCommentsCache>(PR_COMMENTS_CACHE_KEY, {
+    data: truncateToSizeLimit(data),
+    fetchedAt,
+    error: null,
+  });
+};
 
-#### 役割D: 失敗しても既存データを消さない
-
-```ts
-export const writePrCommentsCacheError = async (message: string) => {
+/**
+ * 取得失敗時に error だけ立てる。既存の data / fetchedAt は残す（stale-while-error）。
+ * ネットワークが切れても手元の古いデータを見られるようにするため。
+ * @param message - エラーメッセージ
+ */
+export const writePrCommentsCacheError = async (
+  message: string,
+): Promise<void> => {
   const current = await readPrCommentsCache();
-  await setChromeLocalStorage(PR_COMMENTS_CACHE_KEY, {
-    data: current?.data ?? [],   // ← 既存のデータはそのまま残す
+  await setChromeLocalStorage<PrCommentsCache>(PR_COMMENTS_CACHE_KEY, {
+    data: current?.data ?? [],
     fetchedAt: current?.fetchedAt ?? 0,
     error: message,
   });
 };
-```
 
-ネットワークが切れた時に、**手元にあるデータまで消えてしまうと最悪**です。「取得は失敗したが、10分前のデータは見られる」状態を保ちます（stale-while-error）。
+/**
+ * hard stale（60分超）かどうか。キャッシュが無い場合も true。
+ * true のとき popup は初期表示せず Loading を出す。
+ * @param cache - 判定対象のキャッシュ
+ * @param now - 現在時刻（epoch ms）
+ */
+export const isHardStale = (
+  cache: PrCommentsCache | undefined,
+  now: number,
+): boolean => {
+  if (!cache) return true;
+  return now - cache.fetchedAt > HARD_STALE_MS;
+};
 
----
+### 3. refreshPrComments.ts（新規）— 取得の本体
 
-### 3. `refreshPrComments.ts`（新規）— 取得処理の本体
-
-**このプロジェクトで GitHub API を叩くのは、この関数だけになります。** 取得の入口を1箇所に絞るのが設計の要点です。
+**GitHub API を叩くのはこの関数だけ**にする（入口を1箇所に絞る）。
 
 ```ts
 let inFlight: Promise<void> | null = null;
 const COOLDOWN_MS = 60 * 1000;
 
-export const refreshPrComments = async (force = false): Promise<void> => {
-  // ガード1: すでに取得中なら、その処理に相乗りする
-  if (inFlight) return inFlight;
-
-  // ガード2: 直前に取得したばかりならスキップ
-  if (!force) {
+export const refreshPrComments = async (force = false) => {
+  if (inFlight) return inFlight;                    // 同時実行を防ぐ
+  if (!force) {                                     // 連発を防ぐ
     const cache = await readPrCommentsCache();
     if (cache && Date.now() - cache.fetchedAt < COOLDOWN_MS) return;
   }
-
   inFlight = (async () => {
     try {
-      const token = await getChromeSyncStorage<string>(GITHUB_TOKEN_KEY);
+      const token = await getChromeSyncStorage(GITHUB_TOKEN_KEY);
       if (!token) return;
-
-      const data = await fetchPrComments(token);      // ← 既存関数を再利用
+      const data = await fetchPrComments(token);    // 既存関数を再利用
       await writePrCommentsCache(data, Date.now());
-      await updateBadge(data.length);
-    } catch (error) {
-      console.error("PR コメントの取得に失敗しました:", error);
-      await writePrCommentsCacheError(...);           // 既存データは消さない
+    } catch (e) {
+      await writePrCommentsCacheError(...);          // 既存データは消さない
     } finally {
       inFlight = null;
     }
   })();
-
   return inFlight;
 };
 ```
 
-#### 2つのガードは何のためか
+- **inFlight**：複数トリガが同時発火しても API は1回で済む
+- **COOLDOWN_MS**：`idle` などの連発を抑える。ただし popup の更新ボタンは `force=true` で貫通させる
+- service worker が停止して `inFlight` が消えても問題ない（次のトリガで取り直すだけ）
 
-後述しますが、取得のきっかけ（トリガ）は**6種類**あります。これらが同時に発火することがあります。
+### 4. background/index.ts（変更）— いつ取得するか
 
-**`inFlight`（同時実行の防止）**
-
-```
-時刻 0.0秒  alarm が発火     → 取得開始
-時刻 0.1秒  popup が開かれた → 取得したい
-
-  ガードなし → API を2回叩く（無駄 + レート制限を消費）
-  ガードあり → 2つ目は1つ目の Promise を待つだけ（API は1回）
-```
-
-**`COOLDOWN_MS`（連発の防止）**
-
-`idle` イベントは PC の状態次第で短時間に何度も発火することがあります。「前回の取得から60秒以内なら何もしない」で抑えます。
-
-ただし popup からの明示的な更新は `force = true` でこのガードを**貫通**させます。ユーザーが更新ボタンを押したのに何も起きないのは困るからです。
-
-#### `let inFlight` はグローバル変数だが問題ないのか
-
-service worker は停止すると `inFlight` を失います。しかしこれは問題になりません。**失われた時点で取得も終わっている（もしくは中断されている）ので、次のトリガで改めて取得されるだけ**です。「取得中」の状態が消えても、storage のデータは残ります。
-
----
-
-### 4. `background/index.ts`（変更）— いつ取得するか
-
-現状のファイルは中身が空です。
-
-```ts
-// 変更前
-chrome.runtime.onInstalled.addListener(() => {});
-
-chrome.idle.onStateChanged.addListener((state) => {
-    if(state === "active"){
-        // ← ここが空
-    }
-});
-```
-
-ここに**6つのトリガ**を登録します。
+現状は中身が空。6つのトリガを登録する。
 
 ```ts
 const ALARM_NAME = "refreshPrComments";
 
-// ① インストール直後
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(() => {          // ①インストール時
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: 10 });
   refreshPrComments();
 });
-
-// ② ブラウザ起動時
-chrome.runtime.onStartup.addListener(() => {
+chrome.runtime.onStartup.addListener(() => {            // ②ブラウザ起動時
   chrome.alarms.create(ALARM_NAME, { periodInMinutes: 10 });
   refreshPrComments();
 });
-
-// ③ 10分ごと
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM_NAME) refreshPrComments();
+chrome.alarms.onAlarm.addListener((a) => {              // ③10分ごと
+  if (a.name === ALARM_NAME) refreshPrComments();
 });
-
-// ④ 離席から戻ったとき
-chrome.idle.onStateChanged.addListener((state) => {
-  if (state === "active") refreshPrComments();
+chrome.idle.onStateChanged.addListener((s) => {         // ④離席から復帰
+  if (s === "active") refreshPrComments();
 });
-
-// ⑤ トークンが設定されたとき
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "sync" && changes[GITHUB_TOKEN_KEY]) {
-    refreshPrComments(true);
-  }
+chrome.storage.onChanged.addListener((c, area) => {     // ⑤トークン設定時
+  if (area === "sync" && c[GITHUB_TOKEN_KEY]) refreshPrComments(true);
 });
-
-// ⑥ popup から依頼されたとき
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type !== REFRESH_PR_COMMENTS_MESSAGE) return;
-  refreshPrComments(true).then(() => sendResponse({ ok: true }));
-  return true;  // ← これが無いと動かない（後述）
+chrome.runtime.onMessage.addListener((msg, _s, send) => { // ⑥popup からの依頼
+  if (msg?.type !== REFRESH_PR_COMMENTS_MESSAGE) return;
+  refreshPrComments(true).then(() => send({ ok: true }));
+  return true;   // 非同期に sendResponse するので必須
 });
 ```
 
-#### なぜ `setInterval` ではなく `chrome.alarms` なのか
+補足：
+- **`setInterval` は不可**。service worker が停止するとタイマーごと消える。定期実行は `chrome.alarms`（Chrome 本体が停止中の worker を起こす）が唯一の方法
+- **④が必要な理由**：alarms はスリープ中止まる。復帰後に `idle: active` で取得して穴を埋める
+- **⑥の `return true`**：これが無いと sendResponse 前に通信路が閉じ、popup が永久に待つ（MV3 頻出の罠）
 
-**`setInterval` は使えません。** service worker は数十秒で停止するので、タイマーごと消滅します。
+### 5. useFetchPrCommets.ts（変更）— 表示側
 
-`chrome.alarms` は Chrome 本体が時間を管理し、**時間が来たら止まっている service worker を起こしてくれる**仕組みです。これが MV3 で定期実行する唯一の方法です。
-
-#### なぜ ④ の「離席から戻る」が必要なのか
-
-**`chrome.alarms` は PC がスリープしている間は止まります。**
-
-```
-23:00  PC をスリープ
-09:00  復帰 → alarm は10時間分カウントしていない
-              → データは10時間前のもの
-```
-
-ここで `idle: active`（＝ユーザーが操作を再開した）を捉えて取得することで、**復帰直後でも新しいデータが用意されます**。この2つは互いの穴を埋め合う関係です。
-
-#### ⑥ の `return true` の意味
-
-Chrome のメッセージリスナーは、**何も返さないと「返事はない」と判断して通信路を閉じます。**
+**戻り値の形（`prComments` / `isPending` / `isError` / `error`）は変えない**ので、呼び出し元は無修正で動く。
 
 ```ts
-refreshPrComments(true).then(() => sendResponse({ ok: true }));
-                                 ↑ 非同期なので、後で呼ばれる
-return true;  // ← 「あとで sendResponse を呼ぶから待って」の意思表示
-```
-
-これを忘れると `sendResponse` が呼ばれる前に通信路が閉じ、**popup 側が永久に待ち続けます**。MV3 で最も引っかかりやすい落とし穴の一つです。
-
----
-
-### 5. `useFetchPrCommets.ts`（変更）— 表示側
-
-**戻り値の形（`prComments` / `isPending` / `isError` / `error`）は変えません。** そのため呼び出し元の `PrCommentsListContainer.tsx` は無修正で動きます。
-
-#### 変更前
-
-```ts
-const { data, ... } = useQuery({
-  queryKey: ["prComments", token],
-  queryFn: () => fetchPrComments(token),  // ← popup が直接 API を叩く
-  enabled: !isTokenLoading && !!token,
-});
-```
-
-#### 変更後の3つのポイント
-
-**ポイント1: 起動時にまずキャッシュを読む**
-
-```ts
+// まずキャッシュを読む（storage 読み込みは数ミリ秒 = 初速を決める）
 const { data: cache } = useQuery({
   queryKey: ["prCommentsCache"],
   queryFn: readPrCommentsCache,
   staleTime: Infinity,
 });
-```
 
-storage の読み込みはミリ秒単位で終わるので、**ここが表示の初速を決めます**。
-
-**ポイント2: キャッシュを初期値として渡す**
-
-```ts
 useQuery({
   queryKey: ["prComments", token],
-  queryFn: requestRefresh,
-
+  queryFn: requestRefresh,                                  // popup は直接叩かない
   initialData: () => (isHardStale(cache) ? undefined : cache?.data),
-  initialDataUpdatedAt: cache?.fetchedAt,
+  initialDataUpdatedAt: cache?.fetchedAt,                   // ← 忘れると再取得されない
   staleTime: SOFT_STALE_MS,
 });
 ```
 
-3行が連携しています。
+- `initialData`：キャッシュを初期表示に使う（60分超なら undefined で Loading）
+- `initialDataUpdatedAt`：「このデータは `fetchedAt` 時点のもの」と伝える。無いと react-query が「今取得した」と誤認し、10分経っても再取得しない
+- `staleTime`：10分以内は再取得しない
 
-- `initialData` — キャッシュを初期表示に使う。ただし 60分超なら `undefined` にして Loading を出す
-- `initialDataUpdatedAt` — **「このデータは `fetchedAt` の時点のもの」と react-query に伝える**。これがないと react-query は「今取得したデータ」と誤認して、10分経っても再取得しません
-- `staleTime` — 10分以内なら再取得しない
-
-`initialDataUpdatedAt` は忘れやすく、しかも忘れると**古いデータが更新されなくなる**ので重要です。
-
-**ポイント3: popup 自身は API を叩かない**
+**popup が直接 fetch しない理由**：popup を閉じると fetch も中断され、キャッシュが更新されない。service worker 経由なら閉じても取得は続く。入口を1箇所に保つことで `inFlight` の重複防止も効く。
 
 ```ts
 const requestRefresh = async () => {
@@ -480,221 +305,66 @@ const requestRefresh = async () => {
 };
 ```
 
-「service worker に依頼する → 結果を storage から読む」という流れです。
+おまけ：開いたまま裏で更新が完了しても反映されるよう、`chrome.storage.onChanged` を監視して `queryClient.setQueryData` で差し替える。
 
-**なぜ popup が直接 fetch してはいけないのか:**
-
-```
-popup が直接 fetch した場合:
-  fetch 開始 → ユーザーが popup を閉じる → fetch も中断 → キャッシュは更新されない
-                                                        ↑ 次回また待たされる
-
-service worker 経由の場合:
-  依頼 → popup が閉じても service worker は取得を続ける → キャッシュが更新される
-```
-
-さらに、popup が直接叩くと `inFlight` による重複防止が効かなくなります。**取得の入口を1箇所に保つ理由がここにあります。**
-
-**おまけ: 開いている間の自動反映**
-
-```ts
-useEffect(() => {
-  const handleChange = (changes, areaName) => {
-    if (areaName !== "local" || !changes[PR_COMMENTS_CACHE_KEY]) return;
-    const next = changes[PR_COMMENTS_CACHE_KEY].newValue;
-    queryClient.setQueryData(["prComments", token], next.data);
-    queryClient.setQueryData(["prCommentsCache"], next);
-  };
-
-  chrome.storage.onChanged.addListener(handleChange);
-  return () => chrome.storage.onChanged.removeListener(handleChange);
-}, [queryClient, token]);
-```
-
-storage の変更を監視することで、**popup を開いたまま裏で更新が完了した場合も、画面が自動で最新になります**。
-
----
-
-### 6. `App.tsx`（変更）— 既存のバグ修正
+### 6. App.tsx（変更）— 既存バグの修正
 
 ```diff
-+ // レンダー毎に作り直すとキャッシュが破棄されるため、モジュールスコープに置く
-+ const queryClient = new QueryClient();
-+
++ const queryClient = new QueryClient();   // モジュールスコープへ
   export default function App() {
--   const queryClient = new QueryClient();
--
-    return (
+-   const queryClient = new QueryClient(); // ← 再レンダー毎に作り直してキャッシュ破棄
 ```
 
-**これは今ある不具合の修正です。**
+`QueryClient` がコンポーネント内にあると再レンダーのたびに作り直され、キャッシュが毎回捨てられる。**これを直さないと上の `staleTime`/`initialData` が一切効かない**。今回の土台となる修正。
 
-`new QueryClient()` がコンポーネントの中にあるため、**再レンダーのたびに新しい QueryClient が作られ、それまでのキャッシュが全部捨てられています。** react-query のキャッシュ機構が実質的に無効化されている状態です。
-
-たった2行の移動ですが、**これを直さないと上で設定した `staleTime` や `initialData` が一切機能しません。** 今回の変更の土台になる修正です。
-
----
-
-### 7. `manifest.config.ts`（変更）
+### 7. manifest.config.ts（変更）
 
 ```diff
 -  permissions: ["storage", "nativeMessaging", "idle"],
 +  permissions: ["storage", "alarms", "idle"],
 ```
 
-| 権限 | 扱い | 理由 |
-|---|---|---|
-| `alarms` | **追加** | 10分ごとの定期実行に必須 |
-| `nativeMessaging` | **削除** | コード内で使われていない。ストア審査で用途説明を求められる権限なので、不要なら外すべき |
-| `storage` / `idle` | そのまま | 継続して使用 |
+- `alarms` 追加：定期実行に必須
+- `nativeMessaging` 削除：未使用。審査で用途説明を求められるので外す
 
----
+## 動作フロー
 
-## 変更後の全体の流れ
+| ケース | 挙動 |
+|---|---|
+| 普段 | 裏で10分ごとに取得 → 開いた瞬間に即表示（10分以内なので API を叩かない） |
+| 離席から復帰 | `idle: active` で裏取得 → 開くとほぼ最新を即表示 |
+| スリープ復帰 | データが10〜60分前 → 古いのを即表示しつつ裏で更新 → 静かに差し替え |
+| 初回（トークン設定直後） | `sync.onChanged` で即取得 → 以降は普段と同じ |
 
-### ケース1: 普段の使い方（一番多い）
+## API レート制限
 
-```
-（裏側）10分ごとに alarm → 取得 → local に保存
+GitHub GraphQL は 5,000ポイント/時。**実測でこのクエリは cost=5**（当初の96という概算は誤り）。10分間隔でも消費はごくわずかで、上限に対して問題にならない。
 
-ユーザーがアイコンをクリック
-  ↓
-local を読む（数ミリ秒）
-  ↓
-一覧を表示 ← 待ち 0 秒 ✨
-  ↓
-10分以内のデータなので、API は叩かない
-```
+## 実装上の注意
 
-### ケース2: 離席から戻ってきた
+- **service worker のログは popup の DevTools に出ない**。`chrome://extensions` → 対象拡張 → 「Service Worker」から専用 DevTools を開く。同画面から `refreshPrComments()` を手動実行でき、10分待たずに確認できる
+- **service worker は数十秒で停止するのが正常**。止まっていても壊れていない
+- **スリープ中は alarms が止まる**（Chrome の仕様）。だから `idle: active` と `onStartup` を併用する
 
-```
-PC を操作再開 → idle: active が発火 → 裏で取得 → local を更新
+## 影響範囲
 
-アイコンをクリック → ほぼ最新のデータを即表示
-```
-
-### ケース3: スリープから復帰した直後
-
-```
-alarm はスリープ中止まっていたので、データは古い
-
-アイコンをクリック
-  ↓
-データが 10〜60分前
-  ↓
-古いデータをまず表示（待ち 0 秒）+ 裏で更新
-  ↓
-更新完了 → 画面が静かに最新に切り替わる
-```
-
-### ケース4: 初回（トークン設定直後）
-
-```
-トークンを保存 → sync.onChanged が発火 → 即取得
-
-以降はケース1と同じ
-```
-
----
-
-## API のレート制限について
-
-GitHub GraphQL API は **5,000 ポイント/時**です。
-
-現在のクエリのコストを概算すると:
-
-```
-search 20
-+ comments      20×20 =   400
-+ reviews       20×20 =   400
-+ reviewThreads 20×20 =   400
-+ labels        20×20 =   400
-+ reviewThreads.comments 20×20×20 = 8,000
-─────────────────────────────────────
-≒ 9,620 ノード → 約 96 ポイント/回
-```
-
-10分間隔なら **6回/時 × 96 = 約 580 ポイント/時**。上限の **12%** です。`idle` トリガやフォールバックを足しても、`inFlight` とクールダウンのガードがあれば 20% 以内に収まります。
-
-**ただしこの 96 は概算です。** クエリに実測用のフィールドを足しておくと正確な値が分かります。
-
-```graphql
-query GetPRComments {
-  rateLimit { cost remaining resetAt }   # ← 追加
-  search(...) { ... }
-}
-```
-
-もし想定より大きければ、`reviewThreads.comments(first: 20)` を `first: 10` に下げるだけでコストが半減します（1つのコメントスレッドに20返信は現実的にほぼ無いため）。
-
----
-
-## 実装上の注意点
-
-### service worker のログは popup の DevTools に出ない
-
-`chrome://extensions` → 対象の拡張機能 → **「Service Worker」** のリンクから専用の DevTools を開く必要があります。ここを知らないと「ログが出ない、動いていない」と誤解します。
-
-同じ画面から手動で `refreshPrComments()` を実行できるので、**10分待たずに動作確認できます**。
-
-### service worker はすぐ寝る
-
-数十秒で停止するのが**正常な動作**です。「止まっている＝壊れている」ではありません。トリガが来れば起きます。
-
-### スリープ中は alarm が止まる
-
-これは Chrome の仕様で、回避できません。だから `idle: active` と `onStartup` を併用しています。
-
----
-
-## 影響範囲とリスク
-
-### 変更しないもの（安全な理由）
-
-```
-✅ src/apiClient/FetchGraphQLApiClient.ts                   無変更
-✅ src/features/prComments/services/prCommentsService.ts    無変更
-✅ src/features/prComments/components/*                     無変更
-✅ src/features/threads/components/*                        無変更
-✅ src/components/*                                         無変更
-```
-
-`useFetchPrComments` の**戻り値の形を維持する**ため、表示側は一切影響を受けません。仮に失敗しても、影響は hook と background に閉じています。
-
-### 唯一の挙動変化
-
-`App.tsx` の `QueryClient` 修正により、**これまで無効だった react-query のキャッシュが実際に効き始めます**。意図した修正ですが、既存の表示に何らかの影響が出る可能性はゼロではないので、動作確認の対象です。
-
----
+- 表示側は `useFetchPrComments` の戻り値の形を維持するため無影響。仮に失敗しても影響は hook と background に閉じる
+- 唯一の挙動変化は `App.tsx` の `QueryClient` 修正で **react-query のキャッシュが実際に効き始める**こと（意図した修正だが動作確認の対象）
 
 ## 段階的に進める案
 
-一度に全部やらず、2段に分けると各段階で動作確認できます。
+- **Step 1（低リスク・約30分）**：`App.tsx` の `QueryClient` をモジュールスコープへ + 不要な `console.log` 削除。これだけで popup 開き直し時にキャッシュが効き始め、事前取得がどれだけ必要かの判断材料になる
+- **Step 2（約2時間）**：background による事前取得一式
 
-### Step 1（約30分・低リスク）
+Step 1 だけで十分な可能性もあるので、こちらから始めるのを勧める。
 
-- `App.tsx` の `QueryClient` をモジュールスコープへ
-- `prCommentsService.ts:55` と `PrCommentsListContainer.tsx:7` の `console.log` を削除
-
-これだけで、**popup を開き直した際に react-query のキャッシュが効き始めます**。事前取得なしでも体感が改善する可能性があり、**そもそも事前取得がどれだけ必要かの判断材料**になります。
-
-### Step 2（約2時間）
-
-background による事前取得の一式。
-
-Step 1 だけで十分だった、という結果もあり得るので、こちらから始めるのを勧めます。
-
----
-
-## 用語のまとめ
+## 用語
 
 | 用語 | 意味 |
 |---|---|
-| service worker | 画面を持たない裏方スクリプト。MV3 では常駐せず、イベントごとに起きて数十秒で停止する |
-| `chrome.storage.sync` | 端末間で同期される保存領域。100KB。設定やトークン向け |
-| `chrome.storage.local` | 同期されない保存領域。10MB。キャッシュ向け |
-| `chrome.alarms` | Chrome 本体が管理するタイマー。停止中の service worker を起こせる |
-| stale-while-revalidate | 古いデータをまず表示し、裏で更新して差し替える手法 |
-| stale-while-error | 取得に失敗しても手元の古いデータを保持し続ける手法 |
-| soft stale / hard stale | 「裏で更新すればいい古さ」と「待たせてでも取り直すべき古さ」の2段階の閾値 |
+| service worker | 画面のない裏方。MV3 では常駐せずイベントごとに起きて数十秒で停止 |
+| chrome.storage.sync / local | 同期あり100KB（設定向け）/ 同期なし10MB（キャッシュ向け） |
+| chrome.alarms | Chrome 本体が管理するタイマー。停止中の worker を起こせる |
+| stale-while-revalidate | 古いデータを見せつつ裏で更新して差し替える |
+| stale-while-error | 取得失敗時も手元の古いデータを保持する |
+| soft / hard stale | 「裏で更新すればいい古さ」と「待たせてでも取り直す古さ」の2閾値 |
