@@ -14,7 +14,7 @@ export const PrThread = ({ pr, setIsShowingThread }: PrThreadProps) => {
   const timeline = groupCommentsByThread(pr?.comments || []);
   console.log(timeline)
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto flex flex-col">
       {/* Header Container */}
       <div className="bg-white border-b border-gray-300 flex flex-col">
         {/* Header Content */}
@@ -50,7 +50,7 @@ export const PrThread = ({ pr, setIsShowingThread }: PrThreadProps) => {
         </div>
       </div>
 
-      <div className="p-4 bg-slate-50">
+      <div className="flex-1 p-4 bg-slate-50">
         {/* 時系列順にスレッドと単独コメントを表示 */}
         {timeline.map((item, index) => {
           if (item.type === "thread") {
