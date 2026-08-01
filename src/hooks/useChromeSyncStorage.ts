@@ -30,9 +30,21 @@ export const useChromeSyncStorage = <T>(key: string, initialValue: T) => {
 
     loadStoredValue();
 
+    const handleChange = (
+      changes: { [key: string]: chrome.storage.StorageChange },
+      areaName: string,
+    ) => {
+      if (areaName !== "sync" || !changes[key]) return;
+      const newValue = changes[key].newValue as T | undefined;
+      if (!ignore) setStoredValue(newValue === undefined ? initialValue : newValue);
+    };
+    chrome.storage.onChanged.addListener(handleChange);
+
     return () => {
       ignore = true;
+      chrome.storage.onChanged.removeListener(handleChange);
     };
+    // initialValue は再購読の必要がないため依存に含めない
   }, [key]);
 
   const saveValue = useCallback(async (value: T) => {

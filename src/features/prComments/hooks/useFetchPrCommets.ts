@@ -22,7 +22,7 @@ export const useFetchPrComments = () => {
 
   return {
     prComments: data,
-    isPending: isPending || isTokenLoading,
+    isPending: !hasNoToken && (isPending || isTokenLoading),
     isError: isError || hasNoToken,
     error: error || (hasNoToken ? new Error("GitHubトークンが設定されていません") : null),
   };
