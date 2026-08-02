@@ -1,4 +1,9 @@
-export const Chat = () => {
+type ChatProps = {
+  size?: number;
+  className?: string;
+};
+
+export const Chat = ({ size = 20, className = "" }: ChatProps) => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -6,7 +11,9 @@ export const Chat = () => {
       viewBox="0 0 24 24"
       strokeWidth={1.5}
       stroke="currentColor"
-      className="size-5"
+      width={size}
+      height={size}
+      className={className}
     >
       <path
         strokeLinecap="round"

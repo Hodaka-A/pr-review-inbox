@@ -39,7 +39,12 @@ const transformPrSearchResults = (
         authorAvatarUrl: edge.node.author?.avatarUrl,
       };
     })
-    .filter((pr) => pr.comments && pr.comments.length > 0);
+    .filter((pr) => pr.comments && pr.comments.length > 0)
+    .sort((a, b) => {
+      const dateA = new Date(a.updatedAt || 0).getTime();
+      const dateB = new Date(b.updatedAt || 0).getTime();
+      return dateB - dateA;
+    });
 };
 
 /**

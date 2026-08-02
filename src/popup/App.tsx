@@ -4,7 +4,6 @@ import { MainContents } from "@/components/MainContents";
 import { PrThreadNavigationProvider } from "@/contexts/prThreadNavigationContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-// レンダー毎に生成するとキャッシュが破棄されるため、モジュールスコープに置く
 const queryClient = new QueryClient();
 
 export default function App() {

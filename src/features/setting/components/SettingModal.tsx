@@ -27,7 +27,7 @@ export const SettingModal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-white rounded-lg shadow-xl w-[640px] max-w-[90%] overflow-hidden">
+      <div className="relative bg-white rounded-lg shadow-xl w-[640px] max-w-[70%] overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <Setting />
@@ -83,7 +83,7 @@ export const SettingModal = ({
                   value={token}
                   onChange={(e) => onTokenChange(e.target.value)}
                   placeholder="ghp_xxxxxxxxxxxxxxxx"
-                  className="w-md px-4 py-2 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-[70%] px-4 py-2 bg-gray-100 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
