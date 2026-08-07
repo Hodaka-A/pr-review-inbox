@@ -1,9 +1,11 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { Chat } from "@/components/ui/icons/Chat";
+import { CheckCircle } from "@/components/ui/icons/CheckCircle";
 import { GitPullRequest } from "@/components/ui/icons/GitPullRequest";
 import { GitPullRequestDraft } from "@/components/ui/icons/GitPullRequestDraft";
 import { usePrThreadNavigation } from "@/contexts/prThreadNavigationContext";
 import { PullRequestWithCommentsType } from "@/types/pullRequestDataType";
+import { APPROVED_TEXT_CLASS, isApprovedState } from "@/utils/reviewState";
 import { formatUpdatedAt } from "../utils/formatDate";
 import { stripMarkdown } from "../utils/stripMarkdown";
 
@@ -27,6 +29,18 @@ export const PrCommentCard = ({
 
   // 最新のコメントを取得
   const latestComment = pr.comments?.[pr.comments.length - 1];
+
+  // 最新コメントが承認レビューかどうか
+  const isLatestApproved =
+    latestComment?.commentType === "reviewerComment" &&
+    isApprovedState(latestComment.state);
+
+  // 本文なしの承認はプレビュー文の代わりに固定文を出す
+  const latestCommentPreview = latestComment?.body?.trim()
+    ? stripMarkdown(latestComment.body)
+    : isLatestApproved
+      ? "approved"
+      : null;
 
   return (
     <div
@@ -82,21 +96,22 @@ export const PrCommentCard = ({
           </div>
 
           {/* Latest Comment Preview */}
-          {latestComment && latestComment.body && (
-            <div className="flex items-start gap-2 text-sm text-gray-600">
+          {latestComment && latestCommentPreview && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
               <Avatar
                 src={latestComment.avatarUrl || ""}
                 alt={latestComment.author || ""}
                 size={24}
               />
+              {isLatestApproved && (
+                <CheckCircle className={APPROVED_TEXT_CLASS} />
+              )}
               <div className="flex-1 min-w-0">
                 <span className="font-medium text-gray-700">{latestComment.author}</span>
                 <span className="text-gray-500">: </span>
                 <span className="text-gray-600">
-                  {(() => {
-                    const plainText = stripMarkdown(latestComment.body);
-                    return plainText.substring(0, 40) + (plainText.length > 40 ? "..." : "");
-                  })()}
+                  {latestCommentPreview.substring(0, 40) +
+                    (latestCommentPreview.length > 40 ? "..." : "")}
                 </span>
               </div>
             </div>
